@@ -22,51 +22,28 @@ android {
     namespace = "com.example.gemini"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.antigem"
+        applicationId = "com.termux"
         minSdk = 24
-        targetSdk = 28
+        targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
+
+        buildConfigField("int", "BRIDGE_PORT", "1234")
+        buildConfigField("int", "HUB_PORT", "1235")
+        buildConfigField("int", "BROWSER_MCP_PORT", "8765")
+        buildConfigField("boolean", "IS_SHARED_USER_ID", "false")
     }
 
     signingConfigs {
-        create("release") {
-            storeFile = file("release.jks")
-            storePassword = "123456"
-            keyAlias = "antigem"
-            keyPassword = "123456"
+        create("debugConfig") {
+            storeFile = file("${rootDir}/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
         }
     }
 
-    flavorDimensions += "mode"
-    productFlavors {
-        // Local ports differ per app so com.antigem and com.termux can be installed and run side by side
-        // (com.antigem: +2, so its bridge port never equals com.termux's hub port).
-        create("standard") {
-            dimension = "mode"
-            applicationId = "com.antigem"
-            buildConfigField("int", "BRIDGE_PORT", "1236")
-            buildConfigField("int", "HUB_PORT", "1237")
-            buildConfigField("int", "BROWSER_MCP_PORT", "8767")
-            buildConfigField("boolean", "IS_SHARED_USER_ID", "false")
-        }
-        create("termux") {
-            dimension = "mode"
-            applicationId = "com.termux"
-            buildConfigField("int", "BRIDGE_PORT", "1234")
-            buildConfigField("int", "HUB_PORT", "1235")
-            buildConfigField("int", "BROWSER_MCP_PORT", "8765")
-            buildConfigField("boolean", "IS_SHARED_USER_ID", "false")
-        }
-        create("termuxShared") {
-            dimension = "mode"
-            applicationId = "com.termux"
-            buildConfigField("int", "BRIDGE_PORT", "1234")
-            buildConfigField("int", "HUB_PORT", "1235")
-            buildConfigField("int", "BROWSER_MCP_PORT", "8765")
-            buildConfigField("boolean", "IS_SHARED_USER_ID", "true")
-        }
-    }
+
 
     buildTypes {
         debug {
@@ -74,7 +51,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("debugConfig")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -228,20 +205,20 @@ wire {
   }
 }
 
-val buildAgyIdeBridge = tasks.register<Exec>("buildAgyIdeBridge") {
-  val binDir = layout.projectDirectory.dir("src/main/assets/bin")
-  val bridgeSourceDir = layout.projectDirectory.dir("../agy_ide_bridge")
-
-  doFirst {
-    binDir.asFile.mkdirs()
-  }
-
-  workingDir = bridgeSourceDir.asFile
-  environment("GOOS", "android")
-  environment("GOARCH", "arm64")
-  environment("CGO_ENABLED", "0")
-  commandLine("go", "build", "-ldflags=-s -w", "-o", binDir.file("agy_ide_bridge").asFile.absolutePath, "main.go")
-}
+// val buildAgyIdeBridge = tasks.register<Exec>("buildAgyIdeBridge") {
+//   val binDir = layout.projectDirectory.dir("src/main/assets/bin")
+//   val bridgeSourceDir = layout.projectDirectory.dir("../agy_ide_bridge")
+// 
+//   doFirst {
+//     binDir.asFile.mkdirs()
+//   }
+// 
+//   workingDir = bridgeSourceDir.asFile
+//   environment("GOOS", "android")
+//   environment("GOARCH", "arm64")
+//   environment("CGO_ENABLED", "0")
+//   commandLine("go", "build", "-ldflags=-s -w", "-o", binDir.file("agy_ide_bridge").asFile.absolutePath, "main.go")
+// }
 
 val copyScriptsToAssets = tasks.register<Copy>("copyScriptsToAssets") {
   from(layout.projectDirectory.file("../scripts/backup_bootstrap.sh")) {
@@ -269,7 +246,7 @@ val copyScriptsToAssets = tasks.register<Copy>("copyScriptsToAssets") {
 }
 
 tasks.named("preBuild") {
-  dependsOn(buildAgyIdeBridge, copyScriptsToAssets)
+  dependsOn(/*buildAgyIdeBridge,*/ copyScriptsToAssets)
 }
 
 
