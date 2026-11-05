@@ -22,24 +22,45 @@ android {
     namespace = "com.example.gemini"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.termux"
+        applicationId = "com.antigem"
         minSdk = 24
         targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
-
-        buildConfigField("int", "BRIDGE_PORT", "1234")
-        buildConfigField("int", "HUB_PORT", "1235")
-        buildConfigField("int", "BROWSER_MCP_PORT", "8765")
-        buildConfigField("boolean", "IS_SHARED_USER_ID", "false")
     }
 
     signingConfigs {
+        create("release") {
+            storeFile = file("release.jks")
+            storePassword = "123456"
+            keyAlias = "antigem"
+            keyPassword = "123456"
+        }
         create("debugConfig") {
             storeFile = file("${rootDir}/debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+    }
+
+    flavorDimensions += "mode"
+    productFlavors {
+        create("termux") {
+            dimension = "mode"
+            applicationId = "com.termux"
+            buildConfigField("int", "BRIDGE_PORT", "1234")
+            buildConfigField("int", "HUB_PORT", "1235")
+            buildConfigField("int", "BROWSER_MCP_PORT", "8765")
+            buildConfigField("boolean", "IS_SHARED_USER_ID", "false")
+        }
+        create("termuxShared") {
+            dimension = "mode"
+            applicationId = "com.termux"
+            buildConfigField("int", "BRIDGE_PORT", "1234")
+            buildConfigField("int", "HUB_PORT", "1235")
+            buildConfigField("int", "BROWSER_MCP_PORT", "8765")
+            buildConfigField("boolean", "IS_SHARED_USER_ID", "true")
         }
     }
 
@@ -51,7 +72,11 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("debugConfig")
+            signingConfig = if (file("release.jks").exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debugConfig")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -205,20 +230,33 @@ wire {
   }
 }
 
-// val buildAgyIdeBridge = tasks.register<Exec>("buildAgyIdeBridge") {
-//   val binDir = layout.projectDirectory.dir("src/main/assets/bin")
-//   val bridgeSourceDir = layout.projectDirectory.dir("../agy_ide_bridge")
-// 
-//   doFirst {
-//     binDir.asFile.mkdirs()
-//   }
-// 
-//   workingDir = bridgeSourceDir.asFile
-//   environment("GOOS", "android")
-//   environment("GOARCH", "arm64")
-//   environment("CGO_ENABLED", "0")
-//   commandLine("go", "build", "-ldflags=-s -w", "-o", binDir.file("agy_ide_bridge").asFile.absolutePath, "main.go")
-// }
+val buildAgyIdeBridge = tasks.register<Exec>("buildAgyIdeBridge") {
+  val binDir = layout.projectDirectory.dir("src/main/assets/bin")
+  val bridgeSourceDir = layout.projectDirectory.dir("../agy_ide_bridge")
+
+  doFirst {
+    binDir.asFile.mkdirs()
+  }
+
+  onlyIf {
+    val goFound = try {
+        val process = Runtime.getRuntime().exec(arrayOf("go", "version"))
+        process.waitFor() == 0
+    } catch (e: Exception) {
+        false
+    }
+    if (!goFound) {
+        logger.warn("Go not found, skipping agy_ide_bridge build.")
+    }
+    goFound
+  }
+
+  workingDir = bridgeSourceDir.asFile
+  environment("GOOS", "android")
+  environment("GOARCH", "arm64")
+  environment("CGO_ENABLED", "0")
+  commandLine("go", "build", "-ldflags=-s -w", "-o", binDir.file("agy_ide_bridge").asFile.absolutePath, "main.go")
+}
 
 val copyScriptsToAssets = tasks.register<Copy>("copyScriptsToAssets") {
   from(layout.projectDirectory.file("../scripts/backup_bootstrap.sh")) {
@@ -246,7 +284,7 @@ val copyScriptsToAssets = tasks.register<Copy>("copyScriptsToAssets") {
 }
 
 tasks.named("preBuild") {
-  dependsOn(/*buildAgyIdeBridge,*/ copyScriptsToAssets)
+  dependsOn(buildAgyIdeBridge, copyScriptsToAssets)
 }
 
 
